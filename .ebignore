@@ -1,0 +1,11 @@
+.git/
+.git.disabled/
+.venv/
+.vscode/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+.DS_Store
+.Rhistory
+.pytest_cache/

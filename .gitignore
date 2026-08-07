@@ -1,0 +1,14 @@
+.venv/
+.vscode/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.DS_Store
+.Rhistory
+.pytest_cache/
+
+# Source datasets are kept outside Git and will later be replaced by RDS.
+data/*.csv
+

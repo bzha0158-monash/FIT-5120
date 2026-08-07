@@ -9,9 +9,28 @@ This VS Code Flask application follows the four acceptance criteria:
 
 ## Original datasets
 
-The five source CSV files are retained separately in `data/` with their original filenames. The application does not create replacement or merged CSV files. At runtime, the Flask API temporarily matches rows by `Location_ID` in memory so the map can display predictions; the source files themselves are never changed.
+The application currently reads five source CSV files from `data/`. The CSV
+files are not stored in Git because one of them exceeds GitHub's normal file
+size limit. Obtain the original datasets from the team and place them in
+`data/` using the filenames referenced in `app.py` before running locally.
 
-## Run in VS Code (macOS)
+At runtime, the Flask API temporarily matches rows by `Location_ID` in memory
+so the map can display predictions; the source files themselves are never
+changed. In the planned AWS architecture, these local CSV files will be
+replaced by PostgreSQL/PostGIS on Amazon RDS and an automated data pipeline.
+
+## Run in VS Code
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python app.py
+```
+
+macOS/Linux:
 
 ```bash
 python3 -m venv .venv

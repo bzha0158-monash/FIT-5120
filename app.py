@@ -102,6 +102,13 @@ def load_safe_spaces() -> pd.DataFrame:
 def index():
     return render_template("index.html")
 
+# add health check
+@app.get("/health")
+def health():
+    return jsonify({
+        "status":"ok",
+        "service":"Fit5120-API-Ok",
+    }), 200
 
 @app.get("/api/crowd")
 def crowd():
@@ -157,7 +164,6 @@ def datasets():
         PEDESTRIAN_NETWORK_FILE, PLACES_FILE,
     ]
     return jsonify([{"name": file.name, "bytes": file.stat().st_size} for file in files])
-
 
 if __name__ == "__main__":
     app.run(debug=True, host="127.0.0.1", port=5000)

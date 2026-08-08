@@ -1,4 +1,4 @@
-# CalmRoute — Melbourne CBD Navigation
+# SilentWaze— Melbourne CBD Navigation
 
 This VS Code Flask application follows the four acceptance criteria:
 

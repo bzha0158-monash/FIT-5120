@@ -118,7 +118,7 @@ async function loadData() {
     safeSpaces = await safeResponse.json();
   } catch (error) {
     console.error(error);
-    showToast("Could not load the original local datasets.");
+    showToast("Could not load data from the application database.");
   }
 }
 

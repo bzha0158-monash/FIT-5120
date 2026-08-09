@@ -8,7 +8,7 @@ __pycache__/
 .DS_Store
 .Rhistory
 .pytest_cache/
-
+*.pem
 # Source datasets are kept outside Git and will later be replaced by RDS.
 data/*.csv
 

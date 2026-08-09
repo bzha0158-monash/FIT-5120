@@ -489,9 +489,14 @@ function drawCrowdCoverage(routeCoordinates) {
     const forecastHighText = sensor.forecast_high_threshold == null ? "Unavailable" : `${Math.round(Number(sensor.forecast_high_threshold))}`;
     const currentLevelText = sensor.current_level === "no_data" ? "Unavailable" : sensor.current_level;
     const forecastLevelText = sensor.forecast_level === "no_data" ? "Unavailable" : sensor.forecast_level;
-    const methodText = sensor.forecast_method === "trend_adjusted"
-      ? "current count × historical hour-to-hour trend"
-      : (sensor.forecast_method === "historical_baseline" ? "historical next-hour baseline" : "unavailable");
+    // const methodText = sensor.forecast_method === "trend_adjusted"
+    //   ? "current count × historical hour-to-hour trend"
+    //   : (sensor.forecast_method === "historical_baseline" ? "historical next-hour baseline" : "unavailable");
+    const methodText = sensor.forecast_method === "database_prediction" ? "latest prediction from the application database" : sensor.forecast_method === "trend_adjusted"
+    ? "current count × historical hour-to-hour trend"
+    : sensor.forecast_method === "historical_baseline"
+      ? "historical next-hour baseline"
+      : "unavailable";
 
     coverage.bindPopup(`
       <strong>${sensor.Sensor_Description || "Pedestrian sensor"}</strong><br>

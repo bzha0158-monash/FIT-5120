@@ -1,6 +1,6 @@
 import os
 
-from app import app
+from Silento_app import app
 
 application = app
 

@@ -23,9 +23,14 @@ def extract_csv(url: str)-> pd.DataFrame:
         encoding="utf-8-sig",
     )
 
-def extract_senor_location() -> pd.DataFrame:
+def extract_sensor_locations() -> pd.DataFrame:
     """
      Download a CSV dataset and return it as a raw DataFrame.
     """
     source_url = os.environ["SENSOR_SOURCE_URL"]
+    return extract_csv(source_url)
+
+def extract_pedestrian_counts() -> pd.DataFrame:
+    """Download hourly pedestrian-count data."""
+    source_url = os.environ["PEDESTRIAN_SOURCE_URL"]
     return extract_csv(source_url)

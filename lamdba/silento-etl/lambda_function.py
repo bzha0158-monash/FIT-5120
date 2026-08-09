@@ -11,8 +11,16 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from extra import extract_sensor_locations
-from transforms import transform_sensor_locations
+from extra import (
+    extract_sensor_locations,
+    extract_pedestrian_counts,
+)
+
+from transforms import (
+    transform_sensor_locations,
+    transform_pedestrian_counts,
+)
+
 from load import load_dataframe_to_s3, load_json_to_s3
 
 
@@ -78,6 +86,37 @@ def lambda_handler(event, context):
             sensor_result["key"],
         )
 
+        # ================================================
+        # 4. EXTRACT, TRANSFORM, AND LOAD PEDESTRIAN COUNTS
+        # ================================================
+        raw_pedestrian_df = extract_pedestrian_counts()
+
+        logger.info(
+            "Extracted %s pedestrian-count rows",
+            len(raw_pedestrian_df),
+        )
+
+        clean_pedestrian_df = transform_pedestrian_counts(
+            raw_pedestrian_df
+        )
+
+        logger.info(
+            "Transformed pedestrian rows: raw=%s, clean=%s",
+            len(raw_pedestrian_df),
+            len(clean_pedestrian_df),
+        )
+
+        pedestrian_result = load_dataframe_to_s3(
+            clean_pedestrian_df,
+            f"{run_prefix}/pedestrian-counts.csv",
+        )
+
+        logger.info(
+            "Pedestrian data uploaded to s3://%s/%s",
+            pedestrian_result["bucket"],
+            pedestrian_result["key"],
+        )
+
         # Create this marker only after every ETL step
         # has completed successfully.
         success_data = {
@@ -89,7 +128,12 @@ def lambda_handler(event, context):
                     "raw_rows": len(raw_sensor_df),
                     "clean_rows": len(clean_sensor_df),
                     "s3_key": sensor_result["key"],
-                }
+                },
+                "pedestrian_counts": {
+                    "raw_rows": len(raw_pedestrian_df),
+                    "clean_rows": len(clean_pedestrian_df),
+                    "s3_key": pedestrian_result["key"],
+                },
             },
         }
 
@@ -110,25 +154,17 @@ def lambda_handler(event, context):
                     "message": "ETL completed successfully",
                     "run_id": run_id,
                     "sensor_result": sensor_result,
+                    "pedestrian_result": pedestrian_result,
                     "success_marker": success_result,
                 },
                 default=str,
             ),
         }
 
-    except Exception as error:
+    except Exception:
         logger.exception(
             "ETL run failed: %s",
             run_id,
         )
 
-        return {
-            "statusCode": 500,
-            "body": json.dumps(
-                {
-                    "message": "ETL failed",
-                    "run_id": run_id,
-                    "error": str(error),
-                }
-            ),
-        }
+        raise

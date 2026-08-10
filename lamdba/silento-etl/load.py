@@ -78,7 +78,7 @@ def load_json_to_s3(
 
     This is used to create the _SUCCESS.json marker after
     all cleaned datasets have been uploaded successfully.
-    """
+    """ 
     bucket_name = get_bucket_name()
 
     json_content = json.dumps(

@@ -20,7 +20,9 @@ def inside_cbd(
     )
 
 
-def transform_sensor_locations(dataframe: pd.DataFrame) -> pd.DataFrame:
+def transform_sensor_locations(
+    dataframe: pd.DataFrame,
+) -> pd.DataFrame:
     """Clean and normalise raw pedestrian sensor-location records.
 
     The transform applies the following deterministic rules:
@@ -31,8 +33,11 @@ def transform_sensor_locations(dataframe: pd.DataFrame) -> pd.DataFrame:
     5. Keep the final occurrence of each sensor ID when duplicates exist.
     6. Return only the columns required by downstream consumers.
     """
+
     cleaned = dataframe.copy()
 
+    # Convert API lowercase column names into the names
+    # already used by the existing transform code.
     cleaned = cleaned.rename(
         columns={
             "location_id": "Location_ID",
@@ -48,24 +53,35 @@ def transform_sensor_locations(dataframe: pd.DataFrame) -> pd.DataFrame:
         cleaned["Location_ID"],
         errors="coerce",
     )
+
     cleaned["Latitude"] = pd.to_numeric(
         cleaned["Latitude"],
         errors="coerce",
     )
+
     cleaned["Longitude"] = pd.to_numeric(
         cleaned["Longitude"],
         errors="coerce",
     )
 
     cleaned = cleaned.dropna(
-        subset=["Location_ID", "Latitude", "Longitude"]
+        subset=[
+            "Location_ID",
+            "Latitude",
+            "Longitude",
+        ]
     )
+
     cleaned = cleaned[inside_cbd(cleaned)]
+
     cleaned = cleaned.drop_duplicates(
         subset=["Location_ID"],
         keep="last",
     )
-    cleaned["Location_ID"] = cleaned["Location_ID"].astype(int)
+
+    cleaned["Location_ID"] = (
+        cleaned["Location_ID"].astype(int)
+    )
 
     output_columns = [
         "Location_ID",
@@ -75,16 +91,24 @@ def transform_sensor_locations(dataframe: pd.DataFrame) -> pd.DataFrame:
         "Latitude",
         "Longitude",
     ]
-    return cleaned[output_columns].reset_index(drop=True)
 
-def transform_pedestrian_counts(df: pd.DataFrame) -> pd.DataFrame:
+    return cleaned[
+        output_columns
+    ].reset_index(drop=True)
+
+
+def transform_pedestrian_counts(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
     """
     Clean hourly pedestrian-count records.
     """
     df = df.copy()
 
-    # The source dataset may use either of these column names.
+    # Convert possible source column names into one
+    # consistent output naming convention.
     rename_map = {
+        # Lowercase API field names
         "location_id": "Location_ID",
         "sensing_date": "Sensing_Date",
         "hourday": "Hour_of_Day",
@@ -92,6 +116,8 @@ def transform_pedestrian_counts(df: pd.DataFrame) -> pd.DataFrame:
         "pedestriancount": "Total_of_Directions",
         "pedestrian_count": "Total_of_Directions",
         "total_of_directions": "Total_of_Directions",
+
+        # Alternative labelled CSV field names
         "HourDay": "Hour_of_Day",
         "Hour_Day": "Hour_of_Day",
         "Pedestrian_Count": "Total_of_Directions",
@@ -121,7 +147,8 @@ def transform_pedestrian_counts(df: pd.DataFrame) -> pd.DataFrame:
 
     if missing_columns:
         raise ValueError(
-            f"Pedestrian dataset is missing columns: {missing_columns}. "
+            f"Pedestrian dataset is missing columns: "
+            f"{missing_columns}. "
             f"Available columns: {list(df.columns)}"
         )
 
@@ -155,17 +182,30 @@ def transform_pedestrian_counts(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # Accept only valid hourly records.
-    df = df[df["Hour_of_Day"].between(0, 23)]
-    df = df[df["Total_of_Directions"] >= 0]
+    df = df[
+        df["Hour_of_Day"].between(0, 23)
+    ]
 
-    df["Location_ID"] = df["Location_ID"].astype(int)
-    df["Hour_of_Day"] = df["Hour_of_Day"].astype(int)
+    df = df[
+        df["Total_of_Directions"] >= 0
+    ]
+
+    df["Location_ID"] = (
+        df["Location_ID"].astype(int)
+    )
+
+    df["Hour_of_Day"] = (
+        df["Hour_of_Day"].astype(int)
+    )
+
     df["Total_of_Directions"] = (
         df["Total_of_Directions"].astype(int)
     )
 
     # Store a simple ISO date in the output CSV.
-    df["Sensing_Date"] = df["Sensing_Date"].dt.strftime("%Y-%m-%d")
+    df["Sensing_Date"] = (
+        df["Sensing_Date"].dt.strftime("%Y-%m-%d")
+    )
 
     # One record per sensor, date and hour.
     df = df.drop_duplicates(

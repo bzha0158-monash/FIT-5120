@@ -1,6 +1,7 @@
 import io
 import os
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, quote
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -31,6 +32,20 @@ def extract_sensor_locations() -> pd.DataFrame:
     return extract_csv(source_url)
 
 def extract_pedestrian_counts() -> pd.DataFrame:
-    """Download hourly pedestrian-count data."""
     source_url = os.environ["PEDESTRIAN_SOURCE_URL"]
-    return extract_csv(source_url)
+
+    today = datetime.now(timezone.utc).date()
+
+    three_months_ago = (
+        pd.Timestamp(today) - pd.DateOffset(months=1)
+    ).date()
+
+    where_clause = (
+        f"sensing_date >= date'{three_months_ago.isoformat()}'"
+    )
+
+    filtered_url = (
+        f"{source_url}&where={quote(where_clause)}"
+    )
+
+    return extract_csv(filtered_url)

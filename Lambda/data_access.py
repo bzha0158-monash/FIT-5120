@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 
 import boto3
 import pandas as pd
@@ -72,12 +73,168 @@ def load_sensor_locations(manifest: dict, bucket: str = BUCKET) -> pd.DataFrame:
     return df[in_box].reset_index(drop=True)
 
 
-def load_dataset(manifest: dict, dataset_name: str, bucket: str = BUCKET) -> pd.DataFrame:
+def load_pedestrian_counts(manifest: dict, bucket: str = BUCKET) -> pd.DataFrame:
     """
-    Generic loader for any dataset listed in the manifest, by its key name
-    (e.g. 'pedestrian_minute_counts'). Use this once we know the exact name
-    of the second dataset, to build the current-count / historical-stats
-    loaders the same way load_sensor_locations() reads sensor_locations.
+    Read the cleaned pedestrian_counts dataset (single hourly file — no
+    separate minute-level feed, unlike the original architecture diagram).
+    Columns: Location_ID, Sensing_Date, Hour_of_Day, Total_of_Directions.
     """
-    s3_key = manifest["datasets"][dataset_name]["s3_key"]
-    return _read_csv_from_s3(s3_key, bucket)
+    s3_key = manifest["datasets"]["pedestrian_counts"]["s3_key"]
+    df = _read_csv_from_s3(s3_key, bucket)
+
+    df = df.rename(columns={
+        "Location_ID": "location_id",
+        "Sensing_Date": "sensing_date",
+        "Hour_of_Day": "hour_day",
+        "Total_of_Directions": "total_of_directions",
+    })
+
+    # Dates come as D/M/YYYY (e.g. "9/8/2026" = 9 August 2026).
+    df["sensing_date"] = pd.to_datetime(df["sensing_date"], dayfirst=True, errors="coerce")
+    df["hour_day"] = pd.to_numeric(df["hour_day"], errors="coerce")
+    df["total_of_directions"] = pd.to_numeric(df["total_of_directions"], errors="coerce")
+    df["day_of_week"] = df["sensing_date"].dt.dayofweek
+
+    return df.dropna(subset=["location_id", "sensing_date", "hour_day", "total_of_directions"])
+
+
+def get_recent_hour_totals(counts_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Timestamp | None]:
+    """
+    The most recent hour present in the data, and each sensor's count for
+    that hour. Equivalent to the prototype's 60-minute window, but this
+    feed is already hourly, so there's no minute-level aggregation step.
+    """
+    if counts_df.empty:
+        return pd.DataFrame(columns=["location_id", "current_count"]), None
+
+    max_date = counts_df["sensing_date"].max()
+    same_day = counts_df[counts_df["sensing_date"] == max_date]
+    latest_hour = int(same_day["hour_day"].max())
+
+    recent = same_day[same_day["hour_day"] == latest_hour]
+    totals = (
+        recent.groupby("location_id", as_index=False)["total_of_directions"]
+        .sum(min_count=1)
+        .rename(columns={"total_of_directions": "current_count"})
+    )
+    latest_time = pd.Timestamp(max_date) + pd.Timedelta(hours=latest_hour)
+    return totals, latest_time
+
+
+def get_historical_stats(counts_df: pd.DataFrame, hour: int, day_of_week: int, location_ids: list) -> pd.DataFrame:
+    """
+    Mean and 33rd/66th percentile total for a specific hour-of-day and
+    day-of-week, per sensor — same rule as the original prototype's
+    load_historical_stats(), just computed from this single hourly feed.
+    """
+    subset = counts_df[
+        (counts_df["hour_day"] == hour)
+        & (counts_df["day_of_week"] == day_of_week)
+        & (counts_df["location_id"].isin(location_ids))
+    ]
+    if subset.empty:
+        return pd.DataFrame(columns=["location_id", "expected_count", "low_threshold", "high_threshold"])
+
+    grouped = subset.groupby("location_id")["total_of_directions"]
+    means = grouped.mean().rename("expected_count")
+    low_q = grouped.quantile(1 / 3).rename("low_threshold")
+    high_q = grouped.quantile(2 / 3).rename("high_threshold")
+    return pd.concat([means, low_q, high_q], axis=1).reset_index()
+
+
+def get_rds_connection():
+    """
+    Open a connection to RDS using env vars configured on the Lambda function:
+    DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD.
+    """
+    import psycopg2
+    return psycopg2.connect(
+        host=os.environ["DB_HOST"],
+        port=os.environ.get("DB_PORT", "5432"),
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        sslmode="require",
+        connect_timeout=5,
+    )
+
+
+def write_predictions(forecast_df: pd.DataFrame) -> None:
+    """
+    Insert forecast rows into CROWD_DENSITY_PREDICTION, matching the real
+    table schema:
+      location_id, prediction_for, hour_of_day, day_type, current_count,
+      expected_count, ratio, status, coverage_radius, geom
+    (id and created_at are auto-populated by the table itself.)
+
+    There's no unique constraint on (location_id, prediction_for), so this
+    is a plain insert, not an upsert — each run adds a new row rather than
+    overwriting the previous forecast, which keeps a history over time.
+    """
+    if forecast_df.empty:
+        return
+
+    df = forecast_df.copy()
+
+    df["hour_of_day"] = df["predicted_time"].dt.hour
+    df["day_type"] = df["predicted_time"].dt.dayofweek.apply(
+        lambda d: "weekday" if d < 5 else "weekend"
+    )
+    df["ratio"] = df.apply(
+        lambda row: (row["expected_count"] / row["current_count"])
+        if pd.notna(row["expected_count"]) and pd.notna(row["current_count"]) and row["current_count"] > 0
+        else None,
+        axis=1,
+    )
+    df["status"] = df["forecast_level"]
+
+    # The DB only allows status IN ('low', 'medium', 'high') — a sensor with
+    # no data genuinely has no valid crowd status to report, so those rows
+    # are skipped rather than forced into an incorrect category.
+    skipped = int((df["status"] == "no_data").sum())
+    df = df[df["status"] != "no_data"].copy()
+    if skipped:
+        print(f"Skipped {skipped} sensors with no_data status (not writable under the status CHECK constraint)")
+
+    if df.empty:
+        return
+
+    radius_map = {"low": 28, "medium": 42, "high": 58}
+    df["coverage_radius"] = df["status"].map(radius_map).astype(int)
+
+    df = df.where(pd.notna(df), None)
+
+    rows = list(
+        df[[
+            "location_id", "predicted_time", "hour_of_day", "day_type",
+            "current_count", "expected_count", "ratio", "status",
+            "coverage_radius", "longitude", "latitude",
+        ]].itertuples(index=False, name=None)
+    )
+
+    query = """
+        INSERT INTO crowd_density_prediction
+            (location_id, prediction_for, hour_of_day, day_type,
+             current_count, expected_count, ratio, status, coverage_radius, geom)
+        VALUES %s
+        ON CONFLICT (location_id, prediction_for)
+        DO UPDATE SET
+            hour_of_day = EXCLUDED.hour_of_day,
+            day_type = EXCLUDED.day_type,
+            current_count = EXCLUDED.current_count,
+            expected_count = EXCLUDED.expected_count,
+            ratio = EXCLUDED.ratio,
+            status = EXCLUDED.status,
+            coverage_radius = EXCLUDED.coverage_radius,
+            geom = EXCLUDED.geom
+    """
+    template = "(%s, %s, %s, %s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))"
+
+    conn = get_rds_connection()
+    try:
+        from psycopg2.extras import execute_values
+        with conn.cursor() as cur:
+            execute_values(cur, query, rows, template=template)
+        conn.commit()
+    finally:
+        conn.close()

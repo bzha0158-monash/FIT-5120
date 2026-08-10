@@ -1,52 +1,68 @@
-# SilentWaze— Melbourne CBD Navigation
+# SilentWaze — Melbourne CBD Navigation
 
-This VS Code Flask application follows the four acceptance criteria:
+SilentWaze is a Flask web application that suggests walking-route alternatives
+and evaluates them using pedestrian crowd predictions stored in Amazon RDS for
+PostgreSQL/PostGIS.
 
-1. The user can drag and zoom the Melbourne CBD map.
-2. The user can switch between light and dark map modes.
-3. After a start and destination are selected and a route is generated, nearby safe spaces appear.
-4. After the route is generated, predicted crowd alerts appear as animated area coverage rather than point markers.
+## Repository structure
 
-## Original datasets
+- `Silento_Silent_Ways_Final_version/` — the only active Flask web application
+  and the source used to build the AWS Elastic Beanstalk deployment package.
+- `lamdba/silento-etl/` — AWS Lambda ETL source code that extracts, validates,
+  transforms, and uploads cleaned datasets to Amazon S3.
+- `lamdba/silento-etl.zip` — deployment-ready Lambda archive.
 
-The application currently reads five source CSV files from `data/`. The CSV
-files are not stored in Git because one of them exceeds GitHub's normal file
-size limit. Obtain the original datasets from the team and place them in
-`data/` using the filenames referenced in `app.py` before running locally.
+## Web application
 
-At runtime, the Flask API temporarily matches rows by `Location_ID` in memory
-so the map can display predictions; the source files themselves are never
-changed. In the planned AWS architecture, these local CSV files will be
-replaced by PostgreSQL/PostGIS on Amazon RDS and an automated data pipeline.
+The Flask application:
 
-## Run in VS Code
+- serves the HTML, CSS, and JavaScript frontend;
+- queries sensor locations and crowd predictions from Amazon RDS;
+- queries sensory-refuge locations from Amazon RDS;
+- exposes the data through REST API endpoints;
+- uses Nominatim for location search and reverse geocoding; and
+- uses OSRM for walking-route alternatives.
 
-Windows PowerShell:
+The browser evaluates the OSRM alternatives using nearby crowd-prediction data.
+The current route calculation does not use the `ROAD_NETWORK` or
+`ROUTE_CROWD_SCORE` database tables.
+
+## Run locally
+
+Open PowerShell in `Silento_Silent_Ways_Final_version` and run:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-python app.py
+python Silento_app.py
 ```
 
-macOS/Linux:
+Then open `http://127.0.0.1:5000`.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python app.py
-```
+The following environment variables are required:
 
-Open:
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
 
-```text
-http://127.0.0.1:5000
-```
+Database credentials must not be committed to Git.
 
-The first request to `/api/crowd` may take several seconds because the historical source CSV is large and is aggregated directly from the original file. The result is cached in memory while the server remains running.
+## AWS deployment
 
-## Internet requirement
+The web application is deployed to AWS Elastic Beanstalk. The Beanstalk ZIP
+must contain the contents of `Silento_Silent_Ways_Final_version` at the archive
+root, including:
 
-OpenStreetMap/CARTO map tiles, location search and the walking route service are online services, so an internet connection is required.
+- `application.py`
+- `Silento_app.py`
+- `requirements.txt`
+- `static/`
+- `templates/`
+
+The ETL Lambda currently uploads cleaned files to Amazon S3 under
+`cleaned/runs/...`. Loading those files into RDS is a separate database-loading
+step.

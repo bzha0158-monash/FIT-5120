@@ -9,3 +9,6 @@ __pycache__/
 .DS_Store
 .Rhistory
 .pytest_cache/
+data/
+global-bundle.pem
+Readme.txt

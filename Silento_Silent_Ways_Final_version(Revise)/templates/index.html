@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Silent Waze</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main id="map" aria-label="Interactive map of Melbourne CBD"></main>
+
+  <!-- Compact brand card: intentionally separated from the theme control so the map stays visually open. -->
+  <header class="brand-card glass-panel" aria-label="Silento brand">
+    <div class="brand">
+      <div class="brand-icon brand-letter" aria-hidden="true">S</div>
+      <div>
+        <h1>Silent Waze</h1>
+        <p>Silentoe</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Standalone appearance control on the opposite side of the screen. -->
+  <button id="themeToggle" class="theme-fab glass-panel" aria-label="Switch colour mode" title="Switch colour mode">☾</button>
+
+  <section class="search-panel glass-panel" aria-label="Route search">
+    <div class="panel-kicker">PLAN YOUR WAY</div>
+    <h2>Find a quieter path</h2>
+    <p class="panel-intro">Search two places in Melbourne CBD. Silento compares three walking options using predicted pedestrian conditions.</p>
+
+    <div class="journey-field start-field">
+      <span class="field-marker">A</span>
+      <div class="field-content search-field">
+        <label for="startInput">Starting point</label>
+        <div class="search-row">
+          <input id="startInput" type="text" autocomplete="off" placeholder="Search starting place">
+          <button id="useLocationButton" class="secondary-button" title="Use current location" aria-label="Use current location">
+            <span class="button-icon">◎</span>
+          </button>
+        </div>
+        <div id="startSearchResults" class="search-results hidden" role="listbox" aria-label="Starting point suggestions"></div>
+      </div>
+    </div>
+
+    <div class="journey-connector" aria-hidden="true"><span></span><span></span><span></span></div>
+
+    <div class="journey-field destination-field">
+      <span class="field-marker destination-marker">B</span>
+      <div class="field-content search-field">
+        <label for="destinationInput">Destination</label>
+        <div class="search-row">
+          <input id="destinationInput" type="text" autocomplete="off" placeholder="Search destination">
+        </div>
+        <div id="destinationSearchResults" class="search-results hidden" role="listbox" aria-label="Destination suggestions"></div>
+      </div>
+    </div>
+
+    <button id="routeButton" class="primary-button route-search-button">
+      <span>Find silent ways</span><span aria-hidden="true">→</span>
+    </button>
+
+    <div id="routeActions" class="quick-actions hidden" aria-label="Route layers">
+      <button id="safeSpacesButton" class="chip active"><span class="chip-icon">❋</span>Safe spaces</button>
+      <button id="crowdButton" class="chip active"><span class="chip-icon">◌</span>Crowd alerts</button>
+      <button id="clearButton" class="chip"><span class="chip-icon">×</span>Clear</button>
+    </div>
+  </section>
+
+  <aside id="routeSummary" class="route-summary glass-panel hidden">
+    <button id="closeSummary" class="close-button" aria-label="Close route choices">×</button>
+    <div class="route-summary-head">
+      <div>
+        <div class="panel-kicker">CHOOSE YOUR WAY</div>
+        <h2>Route suggestions</h2>
+      </div>
+      <div class="summary-grid summary-grid-four">
+        <div><span id="distanceValue">—</span><small>Distance</small></div>
+        <div><span id="durationValue">—</span><small>Walk</small></div>
+        <div><span id="alertValue">—</span><small>High alerts</small></div>
+        <div><span id="sensoryValue">—</span><small>Sensory</small></div>
+      </div>
+    </div>
+    <div id="routeOptions" class="route-options" aria-label="Alternative route sensory indicators"></div>
+    <div id="alertMessage" class="alert-message"></div>
+  </aside>
+
+  <div id="legend" class="legend glass-panel hidden">
+    <strong>Next-hour crowd</strong>
+    <span><i class="dot low"></i>Low</span>
+    <span><i class="dot medium"></i>Medium</span>
+    <span><i class="dot high"></i>High</span>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

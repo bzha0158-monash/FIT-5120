@@ -1,0 +1,21 @@
+# Environment — never commit credentials
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Data files — too large for git
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Word/temp files
+~$*.docx
+*.tmp

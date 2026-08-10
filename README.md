@@ -1,61 +1,69 @@
 # SilentWaze — Melbourne CBD Navigation
 
-SilentWaze is a Flask web application that suggests walking-route alternatives
-and evaluates them using pedestrian crowd predictions stored in Amazon RDS for
-PostgreSQL/PostGIS.
+SilentWaze is a sensory-aware walking-route application for Melbourne CBD. It compares walking alternatives using predicted pedestrian conditions and highlights routes with a lower sensory burden for neurodivergent and sensory-sensitive commuters.
+
+## Application preview
+
+### Light mode
+
+![SilentWaze route suggestions in light mode](Silento_Silent_Ways_Final_version/docs/silentwaze-route-demo-light.png)
+
+### Dark mode
+
+![SilentWaze route suggestions in dark mode](Silento_Silent_Ways_Final_version/docs/silentwaze-route-demo.png)
+
+The web interface provides place search, multiple walking-route alternatives, predicted crowd alerts, sensory-refuge locations, and a recommended lower-burden route.
+
+**Live application:** [Open SilentWaze on AWS Elastic Beanstalk](http://silent-waze-iteration1-env.eba-b2b36sbm.ap-southeast-2.elasticbeanstalk.com/)
+
+## System architecture
+
+![SilentWaze AWS system architecture](Silento_Silent_Ways_Final_version/docs/silentwaze-system-architecture.png)
+
+The implemented data and application flow is:
+
+1. Amazon EventBridge triggers the ETL Lambda on a daily schedule.
+2. The ETL Lambda retrieves City of Melbourne sensor and pedestrian-count data, then cleans and validates it.
+3. Cleaned CSV files and a `_SUCCESS.json` manifest are stored in Amazon S3 under `cleaned/runs/<run_id>/`.
+4. The crowd-prediction Lambda reads the latest successful S3 run, calculates next-hour forecasts, and writes predictions to Amazon RDS for PostgreSQL/PostGIS.
+5. The Flask REST API queries crowd predictions, sensor locations, and sensory-refuge locations from RDS.
+6. The browser uses Nominatim for search and reverse geocoding, OSRM for walking alternatives, and client-side route evaluation to recommend a lower-burden route.
+
+## Key features
+
+- Search for a starting point and destination in Melbourne CBD.
+- Compare multiple walking-route alternatives.
+- Display current and next-hour pedestrian crowd information.
+- Highlight high-crowd sensor coverage along routes.
+- Display candidate sensory-refuge locations.
+- Rank routes through client-side sensory evaluation.
+- Support light and dark map interfaces.
 
 ## Repository structure
 
-- `Silento_Silent_Ways_Final_version/` — the only active Flask web application
-  and the source used to build the AWS Elastic Beanstalk deployment package.
-- `lamdba/silento-etl/` — AWS Lambda ETL source code that extracts, validates,
-  transforms, and uploads cleaned datasets to Amazon S3.
-- `lamdba/silento-etl.zip` — deployment-ready Lambda archive.
+- `Silento_Silent_Ways_Final_version/` — active Flask web application and AWS Elastic Beanstalk deployment source.
+- `lamdba/silento-etl/` — ETL Lambda that extracts, validates, transforms, and uploads cleaned datasets to Amazon S3.
+- `Lambda_Crowd_Prediction/` — crowd-prediction Lambda that reads cleaned S3 data and writes forecasts to Amazon RDS.
+- `Silento_Silent_Ways_Final_version/docs/` — README screenshots and architecture assets.
 
-## Web application
+## Technology stack
 
-The Flask application:
+- **Frontend:** HTML, CSS, JavaScript, Leaflet
+- **Backend:** Python, Flask, Gunicorn
+- **Database:** Amazon RDS for PostgreSQL/PostGIS
+- **Data pipeline:** Amazon EventBridge, AWS Lambda, Amazon S3
+- **External mapping services:** OpenStreetMap/Nominatim and OSRM Foot Router
+- **Deployment:** AWS Elastic Beanstalk on Amazon Linux
 
-- serves the HTML, CSS, and JavaScript frontend;
-- queries sensor locations and crowd predictions from Amazon RDS;
-- queries sensory-refuge locations from Amazon RDS;
-- exposes the data through REST API endpoints;
-- uses Nominatim for location search and reverse geocoding; and
-- uses OSRM for walking-route alternatives.
+## REST API endpoints
 
-The browser evaluates the OSRM alternatives using nearby crowd-prediction data.
-The current route calculation does not use the `ROAD_NETWORK` or
-`ROUTE_CROWD_SCORE` database tables.
+- `GET /api/crowd` — returns sensor locations and the latest available crowd predictions.
+- `GET /api/safe-spaces` — returns candidate sensory-refuge locations.
+- `GET /health` — returns the web application's health status.
 
-## Run locally
+## AWS Elastic Beanstalk deployment
 
-Open PowerShell in `Silento_Silent_Ways_Final_version` and run:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python Silento_app.py
-```
-
-Then open `http://127.0.0.1:5000`.
-
-The following environment variables are required:
-
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_USER`
-- `DB_PASSWORD`
-
-Database credentials must not be committed to Git.
-
-## AWS deployment
-
-The web application is deployed to AWS Elastic Beanstalk. The Beanstalk ZIP
-must contain the contents of `Silento_Silent_Ways_Final_version` at the archive
-root, including:
+The Beanstalk deployment ZIP must contain the following files and directories at the archive root, without an additional parent-directory layer:
 
 - `application.py`
 - `Silento_app.py`
@@ -63,6 +71,11 @@ root, including:
 - `static/`
 - `templates/`
 
-The ETL Lambda currently uploads cleaned files to Amazon S3 under
-`cleaned/runs/...`. Loading those files into RDS is a separate database-loading
-step.
+The Backend API and web frontend are delivered through the same Elastic Beanstalk deployment. Runtime database settings are supplied through Elastic Beanstalk environment properties.
+
+## Current implementation notes
+
+- The ETL Lambda writes cleaned data to Amazon S3; it does not directly load the cleaned CSV files into RDS.
+- The crowd-prediction Lambda reads the latest successful S3 run and writes forecast records to `CROWD_DENSITY_PREDICTION`.
+- Route geometry comes from OSRM rather than the `ROAD_NETWORK` table.
+- Route evaluation currently runs in the browser and does not persist results to `ROUTE_CROWD_SCORE`.

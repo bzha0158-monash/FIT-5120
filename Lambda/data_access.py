@@ -89,8 +89,8 @@ def load_pedestrian_counts(manifest: dict, bucket: str = BUCKET) -> pd.DataFrame
         "Total_of_Directions": "total_of_directions",
     })
 
-    # Dates come as D/M/YYYY (e.g. "9/8/2026" = 9 August 2026).
-    df["sensing_date"] = pd.to_datetime(df["sensing_date"], dayfirst=True, errors="coerce")
+    # Dates come as YYYY-MM-DD (e.g. "2026-07-25").
+    df["sensing_date"] = pd.to_datetime(df["sensing_date"], format="%Y-%m-%d", errors="coerce")
     df["hour_day"] = pd.to_numeric(df["hour_day"], errors="coerce")
     df["total_of_directions"] = pd.to_numeric(df["total_of_directions"], errors="coerce")
     df["day_of_week"] = df["sensing_date"].dt.dayofweek

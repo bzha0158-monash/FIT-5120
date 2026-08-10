@@ -2,6 +2,7 @@
 Main controller for the Silento ETL Lambda.
 
 ETL workflow:
+
 1. Extract raw data
 2. Transform and validate the data
 3. Load the cleaned data into Amazon S3
@@ -22,7 +23,6 @@ from transforms import (
 )
 
 from load import load_dataframe_to_s3, load_json_to_s3
-
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -56,6 +56,14 @@ def lambda_handler(event, context):
             len(raw_sensor_df),
         )
 
+        # NEW: pedestrian count
+        raw_pedestrian_df = extract_pedestrian_counts()
+
+        logger.info(
+            "Extracted %s pedestrian-count rows",
+            len(raw_pedestrian_df),
+        )
+
         # ================================================
         # 2. TRANSFORM
         # ================================================
@@ -67,6 +75,17 @@ def lambda_handler(event, context):
             "Transformed sensor rows: raw=%s, clean=%s",
             len(raw_sensor_df),
             len(clean_sensor_df),
+        )
+
+        # NEW: pedestrian count
+        clean_pedestrian_df = transform_pedestrian_counts(
+            raw_pedestrian_df
+        )
+
+        logger.info(
+            "Transformed pedestrian rows: raw=%s, clean=%s",
+            len(raw_pedestrian_df),
+            len(clean_pedestrian_df),
         )
 
         # ================================================
@@ -86,29 +105,13 @@ def lambda_handler(event, context):
             sensor_result["key"],
         )
 
-        # ================================================
-        # 4. EXTRACT, TRANSFORM, AND LOAD PEDESTRIAN COUNTS
-        # ================================================
-        raw_pedestrian_df = extract_pedestrian_counts()
-
-        logger.info(
-            "Extracted %s pedestrian-count rows",
-            len(raw_pedestrian_df),
-        )
-
-        clean_pedestrian_df = transform_pedestrian_counts(
-            raw_pedestrian_df
-        )
-
-        logger.info(
-            "Transformed pedestrian rows: raw=%s, clean=%s",
-            len(raw_pedestrian_df),
-            len(clean_pedestrian_df),
-        )
-
+        # NEW: pedestrian count
         pedestrian_result = load_dataframe_to_s3(
             clean_pedestrian_df,
-            f"{run_prefix}/pedestrian-counts.csv",
+            (
+                f"{run_prefix}/"
+                "pedestrian-counts.csv"
+            ),
         )
 
         logger.info(
@@ -129,6 +132,8 @@ def lambda_handler(event, context):
                     "clean_rows": len(clean_sensor_df),
                     "s3_key": sensor_result["key"],
                 },
+
+                # NEW: pedestrian count
                 "pedestrian_counts": {
                     "raw_rows": len(raw_pedestrian_df),
                     "clean_rows": len(clean_pedestrian_df),
@@ -154,17 +159,29 @@ def lambda_handler(event, context):
                     "message": "ETL completed successfully",
                     "run_id": run_id,
                     "sensor_result": sensor_result,
+
+                    # NEW
                     "pedestrian_result": pedestrian_result,
+
                     "success_marker": success_result,
                 },
                 default=str,
             ),
         }
 
-    except Exception:
+    except Exception as error:
         logger.exception(
             "ETL run failed: %s",
             run_id,
         )
 
-        raise
+        return {
+            "statusCode": 500,
+            "body": json.dumps(
+                {
+                    "message": "ETL failed",
+                    "run_id": run_id,
+                    "error": str(error),
+                }
+            ),
+        }

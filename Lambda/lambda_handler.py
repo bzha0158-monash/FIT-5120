@@ -7,8 +7,7 @@ Pipeline:
   2. Load sensor_locations + pedestrian_counts from that run
   3. Compute current-hour totals and historical hour/weekday stats
   4. Run forecast_logic.build_forecast_frame() to classify + predict
-  5. Return the forecast (RDS write-back can be added once RDS exists —
-     see the TODO note below)
+  5. Return the forecast
 """
 from __future__ import annotations
 
@@ -70,7 +69,8 @@ def lambda_handler(event, context):
     print(f"Computed forecast for {len(forecast)} sensors, next hour = {next_time.isoformat()}")
 
     write_predictions(forecast)
-    print(f"Wrote {len(forecast)} predictions to CROWD_DENSITY_PREDICTION")
+    written_count = int((forecast["forecast_level"] != "no_data").sum())
+    print(f"Wrote {written_count} predictions to CROWD_DENSITY_PREDICTION ({len(forecast) - written_count} skipped for no_data)")
 
     output_columns = [
         "location_id", "sensor_description", "current_count", "current_level",
